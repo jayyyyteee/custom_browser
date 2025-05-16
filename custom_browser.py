@@ -1,12 +1,21 @@
 import socket
 import ssl
+import urllib.parse
+
+###example urls http://example.org  file:///path/goes/here data:text/html,Hello world!
 class URL:
     def __init__(self, url):
-        self.scheme,url = url.split("://",1)
-        assert self.scheme in ["http", "https","file"]
+        if url.split(":", 1)[0] == "data":
+            self.scheme,url = url.split(":",1)
+        else:
+            self.scheme,url = url.split("://",1)
+
+        assert self.scheme in ["http", "https","file","data"]
         if "/" not in url:
             url = url + "/"
         if self.scheme == "file":
+            self.path = url
+        elif self.scheme == "data":
             self.path = url
         else:
             self.host,url = url.split("/", 1)
@@ -23,6 +32,10 @@ class URL:
         if self.scheme == "file":
             f = open(self.path, encoding="utf8")
             return f.read()
+
+        if self.scheme == "data":
+            metadata, content = self.path.split(",", 1)
+            return urllib.parse.unquote(content)
 
         s = socket.socket(
             family = socket.AF_INET,
@@ -70,7 +83,7 @@ class URL:
     
 def show(body):
     in_tag = False
-    for c in body:
+    for c in body: 
         if c == "<":
             in_tag = True
         elif c == ">":
