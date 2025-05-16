@@ -3,20 +3,27 @@ import ssl
 class URL:
     def __init__(self, url):
         self.scheme,url = url.split("://",1)
-        assert self.scheme in ["http", "https"]
+        assert self.scheme in ["http", "https","file"]
         if "/" not in url:
             url = url + "/"
-        self.host,url = url.split("/", 1)
-        self.path = "/" + url
-        if self.scheme == "http":
-            self.port = 80
-        elif self.scheme == "https":
-            self.port = 443
-        if ":" in self.host:
-            self.host, port = self.host.split(":", 1)
-            self.port = int(port)
+        if self.scheme == "file":
+            self.path = url
+        else:
+            self.host,url = url.split("/", 1)
+            self.path = "/" + url
+            if self.scheme == "http":
+                self.port = 80
+            elif self.scheme == "https":
+                self.port = 443
+            if ":" in self.host:
+                self.host, port = self.host.split(":", 1)
+                self.port = int(port)
 
     def request(self):
+        if self.scheme == "file":
+            f = open(self.path, encoding="utf8")
+            return f.read()
+
         s = socket.socket(
             family = socket.AF_INET,
             type = socket.SOCK_STREAM,
@@ -26,6 +33,8 @@ class URL:
         if self.scheme == "https":
             ctx = ssl.create_default_context()
             s = ctx.wrap_socket(s, server_hostname=self.host)
+
+        #Headers Dictionary,  add any headers to
         headers = {
             "Host": self.host,
             "Connection": "close",
@@ -34,12 +43,15 @@ class URL:
         request = "GET {} HTTP/1.1\r\n".format(self.path)
         for x,y in headers.items():
             request += f"{x}: {y}\r\n"
-
+        request += "\r\n" 
+        ###forloop contents
         # request = "GET {} HTTP/1.1\r\n".format(self.path)
         # request += "Host: {}\r\n".format(self.host)
         # request += "Connection: close\r\n"
         # request += "User-Agent: custom_browser/1.0"
-        request += "\r\n"
+
+
+        #send contents using utf8 encoding
         s.send(request.encode("utf8"))
         response = s.makefile("r", encoding="utf8", newline="\r\n")
         statusline = response.readline()
