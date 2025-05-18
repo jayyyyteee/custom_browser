@@ -83,11 +83,27 @@ class URL:
     
 def show(body):
     in_tag = False
+    in_entity = False
+    entity_buffer = ""
     for c in body: 
         if c == "<":
             in_tag = True
         elif c == ">":
             in_tag = False
+        elif in_entity:
+            entity_buffer += c
+            if c == ";":
+                if entity_buffer == "&lt;":
+                    print("<", end="")
+                elif entity_buffer == "&gt;":
+                    print(">", end = "")
+                else:
+                    print(entity_buffer, end = "")
+                in_entity = False
+                entity_buffer = ""
+        elif c == "&":
+            in_entity = True
+            entity_buffer = "&"
         elif not in_tag:
             print(c , end="")
 
