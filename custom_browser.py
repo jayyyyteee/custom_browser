@@ -5,10 +5,16 @@ import urllib.parse
 ###example urls http://example.org  file:///path/goes/here data:text/html,Hello world!
 class URL:
     def __init__(self, url):
+        self.view_source = False
+        if url.startswith("view-source:"):
+            self.view_source = True
+            url=url[len("view-source:"):]
+
         if url.split(":", 1)[0] == "data":
             self.scheme,url = url.split(":",1)
         else:
             self.scheme,url = url.split("://",1)
+        
 
         assert self.scheme in ["http", "https","file","data"]
         if "/" not in url:
@@ -109,7 +115,10 @@ def show(body):
 
 def load(url):
     body = url.request()
-    show(body)
+    if url.view_source:
+        print(body, end = "")
+    else:
+        show(body)
 
 if __name__ == "__main__":
     import sys
