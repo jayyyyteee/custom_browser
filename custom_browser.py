@@ -2,9 +2,13 @@ import socket
 import ssl
 import urllib.parse
 
+SOCKET_CACHE = {}
 ###example urls http://example.org  file:///path/goes/here data:text/html,Hello world!
 class URL:
     def __init__(self, url):
+        #check for view-source and flag
+
+
         self.view_source = False
         if url.startswith("view-source:"):
             self.view_source = True
@@ -42,21 +46,29 @@ class URL:
         if self.scheme == "data":
             metadata, content = self.path.split(",", 1)
             return urllib.parse.unquote(content)
-
-        s = socket.socket(
-            family = socket.AF_INET,
-            type = socket.SOCK_STREAM,
-            proto = socket.IPPROTO_TCP,)
         
-        s.connect((self.host,self.port))
-        if self.scheme == "https":
-            ctx = ssl.create_default_context()
-            s = ctx.wrap_socket(s, server_hostname=self.host)
+        #use socket cache to reuse open ports
+        key = (self.host, self.port)
+
+        if key in SOCKET_CACHE:
+            print(f"reusing socket key for {key}")
+            s = SOCKET_CACHE[key]
+        else:
+            s = socket.socket(
+                family = socket.AF_INET,
+                type = socket.SOCK_STREAM,
+                proto = socket.IPPROTO_TCP,)
+            
+            s.connect((self.host,self.port))
+            if self.scheme == "https":
+                ctx = ssl.create_default_context()
+                s = ctx.wrap_socket(s, server_hostname=self.host)
+            SOCKET_CACHE[key] = s
 
         #Headers Dictionary,  add any headers to
         headers = {
             "Host": self.host,
-            "Connection": "close",
+            "Connection": "keep-alive",
             "User-Agent": "custom_browser/1.0"
         }
         request = "GET {} HTTP/1.1\r\n".format(self.path)
@@ -72,19 +84,19 @@ class URL:
 
         #send contents using utf8 encoding
         s.send(request.encode("utf8"))
-        response = s.makefile("r", encoding="utf8", newline="\r\n")
-        statusline = response.readline()
+        response = s.makefile("rb")
+        statusline = response.readline().decode("utf8")
         version,status,explanation = statusline.split(" ", 2)
         response_headers = {}
         while True:
-            line = response.readline()
+            line = response.readline().decode("utf8")
             if line =="\r\n": break
             header,value = line.split(":", 1)
             response_headers[header.casefold()] = value.strip()
         assert "transfer-encoding" not in response_headers
         assert "content-encoding" not in response_headers
-        content = response.read()
-        s.close()
+        length = int(response_headers["content-length"])
+        content = response.read(length).decode("utf8")
         return content
     
 def show(body):
@@ -123,3 +135,8 @@ def load(url):
 if __name__ == "__main__":
     import sys
     load(URL(sys.argv[1]))
+
+    # print("\n\n--second request--\n")
+
+    # url2 = URL(sys.argv[1])
+    # load(url2)
