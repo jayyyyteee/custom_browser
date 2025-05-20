@@ -38,7 +38,7 @@ class URL:
                 self.host, port = self.host.split(":", 1)
                 self.port = int(port)
 
-    def request(self):
+    def request(self, redirect_count = 0):
         if self.scheme == "file":
             f = open(self.path, encoding="utf8")
             return f.read()
@@ -51,7 +51,6 @@ class URL:
         key = (self.host, self.port)
 
         if key in SOCKET_CACHE:
-            print(f"reusing socket key for {key}")
             s = SOCKET_CACHE[key]
         else:
             s = socket.socket(
@@ -93,6 +92,22 @@ class URL:
             if line =="\r\n": break
             header,value = line.split(":", 1)
             response_headers[header.casefold()] = value.strip()
+        #redirect
+        if status.startswith("3"):
+            if redirect_count > 5:
+                raise Exception("Too Many Redirects")
+            redirect_url = response_headers.get("location")
+            if redirect_url.startswith("/"):
+                redirect_url = f"{self.scheme}://{self.host}{redirect_url}"
+            new_url = URL(redirect_url)
+            return new_url.request(redirect_count + 1)
+
+        
+        #print response headers
+        # print("Response Headers:")
+        # for header, value in response_headers.items():
+        #     print(f"{header}: {value}")
+
         assert "transfer-encoding" not in response_headers
         assert "content-encoding" not in response_headers
         length = int(response_headers["content-length"])
