@@ -2,6 +2,7 @@ import socket
 import ssl
 import urllib.parse
 import time
+import gzip
 
 SOCKET_CACHE = {}
 RESPONSE_CACHE = {}
@@ -41,10 +42,13 @@ class URL:
                 self.port = int(port)
 
     def request(self, redirect_count = 0):
+
+        #file url
         if self.scheme == "file":
             f = open(self.path, encoding="utf8")
             return f.read()
-
+        
+        #data url
         if self.scheme == "data":
             metadata, content = self.path.split(",", 1)
             return urllib.parse.unquote(content)
@@ -52,15 +56,16 @@ class URL:
         #use socket cache to reuse open ports
         key = (self.host, self.port)
         response_key = f"{self.scheme}://{self.host}:{self.port}{self.path}"
-        print(response_key)
+        
+        #response cache
         if response_key in RESPONSE_CACHE:
             print("found in response_cache")
             entry = RESPONSE_CACHE[response_key]
             age = time.time() - entry["timestamp"]
             if age < entry["max_age"]:
-                print("CACHE HIT")
                 return entry["content"]
-
+            
+        #socket cache
         if key in SOCKET_CACHE:
             s = SOCKET_CACHE[key]
         else:
@@ -79,7 +84,9 @@ class URL:
         headers = {
             "Host": self.host,
             "Connection": "keep-alive",
-            "User-Agent": "custom_browser/1.0"
+            "User-Agent": "custom_browser/1.0",
+            "Accept-Encoding": "gzip"
+            
         }
         request = "GET {} HTTP/1.1\r\n".format(self.path)
         for x,y in headers.items():
@@ -119,12 +126,33 @@ class URL:
         # for header, value in response_headers.items():
         #     print(f"{header}: {value}")
 
-        assert "transfer-encoding" not in response_headers
-        assert "content-encoding" not in response_headers
-        length = int(response_headers["content-length"])
-        content = response.read(length).decode("utf8")
+        #gzip/chunked compression
+        content_encoding = response_headers.get("content-encoding","").lower()
+        transfer_encoding = response_headers.get("transfer-encoding", "").lower()
+        if "chunked" in transfer_encoding:
+            body = b""
+            while True:
+                line = response.readline()
+                if not line:
+                    break
+                length = int(line.strip(), 16)
+                if length == 0:
+                    break
+                body += response.read(length)
+                response.read(2)
+        
+        else:
+            length = int(response_headers.get("content-length","0"))
+            body = response.read(length)
+
+        if "gzip" in content_encoding:
+            content = gzip.decompress(body).decode("utf8")
+
+        else:        
+            content = body.decode("utf8")
+
+        #cache control parsing
         cache_control = response_headers.get("cache-control", "").lower()
-        print(cache_control)
         max_age = 0
         cache = False
         if "no-store" in cache_control:
@@ -139,14 +167,13 @@ class URL:
                     cache = False
             else:
                 cache = True
-        
+        #save contents to response cache
         if cache and status.startswith("2"):
             RESPONSE_CACHE[response_key] = {
                 "timestamp" : time.time(),
                 "max_age" : max_age,
                 "content" : content
             }
-        print("Response cached with max-age:", max_age)
         return content
 
     
