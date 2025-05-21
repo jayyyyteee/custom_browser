@@ -1,8 +1,10 @@
 import socket
 import ssl
 import urllib.parse
+import time
 
 SOCKET_CACHE = {}
+RESPONSE_CACHE = {}
 ###example urls http://example.org  file:///path/goes/here data:text/html,Hello world!
 class URL:
     def __init__(self, url):
@@ -49,6 +51,15 @@ class URL:
         
         #use socket cache to reuse open ports
         key = (self.host, self.port)
+        response_key = f"{self.scheme}://{self.host}:{self.port}{self.path}"
+        print(response_key)
+        if response_key in RESPONSE_CACHE:
+            print("found in response_cache")
+            entry = RESPONSE_CACHE[response_key]
+            age = time.time() - entry["timestamp"]
+            if age < entry["max_age"]:
+                print("CACHE HIT")
+                return entry["content"]
 
         if key in SOCKET_CACHE:
             s = SOCKET_CACHE[key]
@@ -112,7 +123,32 @@ class URL:
         assert "content-encoding" not in response_headers
         length = int(response_headers["content-length"])
         content = response.read(length).decode("utf8")
+        cache_control = response_headers.get("cache-control", "").lower()
+        print(cache_control)
+        max_age = 0
+        cache = False
+        if "no-store" in cache_control:
+            cache = False
+        else:
+            cache = True
+            if "max-age=" in cache_control:
+                try:
+                    max_age = int(cache_control.split("max-age=")[1].split(",")[0])
+                    cache = True
+                except ValueError:
+                    cache = False
+            else:
+                cache = True
+        
+        if cache and status.startswith("2"):
+            RESPONSE_CACHE[response_key] = {
+                "timestamp" : time.time(),
+                "max_age" : max_age,
+                "content" : content
+            }
+        print("Response cached with max-age:", max_age)
         return content
+
     
 def show(body):
     in_tag = False
