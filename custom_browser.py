@@ -235,12 +235,31 @@ class Browser:
         )
         self.canvas.pack()
         self.scroll = 0
-        self.window.bind("<Down>", self.scrolldown)
-    
-    def scrolldown(self, e):
-        self.scroll += SCROLL_STEP
+        self.window.bind("<Down>", self.scrollarrow)
+        self.window.bind("<Up>", self.scrollarrow)
+        self.window.bind("<MouseWheel>", self.on_mousewheel)
+        self.window.bind("<Button-4>", self.on_mousewheel_linux)
+        self.window.bind("<Button-5>", self.on_mousewheel_linux)
+
+    def on_mousewheel(self, e):
+        direction = -1 if e.delta > 0 else 1 #negative becasue scroll = up
+        self.scroll = max(0, self.scroll + direction*SCROLL_STEP)
         self.draw()
     
+    def on_mousewheel_linux(self, e):
+        if e.num == 4:
+            self.scroll = max(0, self.scroll - SCROLL_STEP)
+        elif e.num == 5:
+            self.scroll += SCROLL_STEP
+        self.draw()
+    
+    def scrollarrow(self, e):
+        if e.keysym == "Up":
+            self.scroll = max(0, self.scroll - SCROLL_STEP)
+        elif e.keysym == "Down":
+            self.scroll += SCROLL_STEP
+        self.draw()
+
     def draw(self):
         self.canvas.delete("all")
         for x, y, c in self.display_list:
