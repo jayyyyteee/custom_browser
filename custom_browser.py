@@ -214,6 +214,10 @@ def layout(text):
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
     for c in text:
+        if c == "\n":
+            cursor_x = HSTEP
+            cursor_y += VSTEP * 2 #break for newline
+            continue
         display_list.append((cursor_x, cursor_y,  c))
         cursor_x += HSTEP
         if cursor_x >= WIDTH - HSTEP:
@@ -246,6 +250,10 @@ class Browser:
 
     def load(self, url):
         body = url.request()
+        if url.view_source:
+            self.display_list = layout(body)
+            self.draw()
+            return 
         text = lex(body)
         self.display_list= layout(text)
         self.draw()
