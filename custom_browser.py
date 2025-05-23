@@ -210,7 +210,9 @@ def lex(body):
     return text
 
 
-def layout(text):
+def layout(text, width):
+    min_width = 100
+    width = max(width, min_width)
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
     for c in text:
@@ -220,7 +222,7 @@ def layout(text):
             continue
         display_list.append((cursor_x, cursor_y,  c))
         cursor_x += HSTEP
-        if cursor_x >= WIDTH - HSTEP:
+        if cursor_x >= width - HSTEP:
             cursor_y += VSTEP
             cursor_x = HSTEP
     return display_list
@@ -233,14 +235,22 @@ class Browser:
             width = WIDTH,
             height = HEIGHT
         )
-        self.canvas.pack()
+        self.canvas.pack(fill = "both",expand = True)
         self.scroll = 0
         self.window.bind("<Down>", self.scrollarrow)
         self.window.bind("<Up>", self.scrollarrow)
         self.window.bind("<MouseWheel>", self.on_mousewheel)
         self.window.bind("<Button-4>", self.on_mousewheel_linux)
         self.window.bind("<Button-5>", self.on_mousewheel_linux)
+        self.window.bind("<Configure>", self.resize)
 
+    
+    def resize(self, e):
+        if hasattr(self, "text"):
+            self.display_list = layout(self.text, e.width)
+        self.draw()
+
+    
     def on_mousewheel(self, e):
         direction = -1 if e.delta > 0 else 1 #negative becasue scroll = up
         self.scroll = max(0, self.scroll + direction*SCROLL_STEP)
@@ -263,7 +273,7 @@ class Browser:
     def draw(self):
         self.canvas.delete("all")
         for x, y, c in self.display_list:
-            if y > self.scroll + HEIGHT:continue
+            if y > self.scroll + self.canvas.winfo_height():continue
             if y + VSTEP < self.scroll: continue
             self.canvas.create_text(x, y-self.scroll, text = c)
 
@@ -273,8 +283,8 @@ class Browser:
             self.display_list = layout(body)
             self.draw()
             return 
-        text = lex(body)
-        self.display_list= layout(text)
+        self.text = lex(body)
+        self.display_list= layout(self.text, self.canvas.winfo_width())
         self.draw()
 
 
